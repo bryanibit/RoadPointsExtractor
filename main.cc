@@ -1,9 +1,12 @@
 #include "xy2000_lb2000.h"
 #include <iostream>
+#include <iomanip>
 #include <fstream>
 #include <vector>
 #include <string>
+#include <unordered_map>
 #include "opencv2/opencv.hpp"
+//#include "opencv2/highgui.hpp"
 
 using namespace std;
 
@@ -43,11 +46,25 @@ private:
     double res_;
     cv::Mat map_;
 //            (cv::Size(1000, 1000), CV_8UC3, cv::Scalar(0, 0, 0));
-    unordered_map<int, std::pair<double, double> > pixel2xy_;
+    std::unordered_map<int, std::pair<double, double> > pixel2xy_;
     vector<int> path;
+    vector<PosXY> choose_points;
+
 public:
+    static void MouseClick(int event, int x, int y, int flag, void* userdata){
+        auto showmap_obj = reinterpret_cast<ShowMap*>(userdata);
+        showmap_obj->OnMouse(event, x,y,flag);
+    }
+    void OnMouse(int event, int x, int y, int flag){
+        if (event == CV_EVENT_LBUTTONDOWN) {
+            auto choose = cv::Point(x, y);
+            std::cout << "x,y: " << x << ", " << y << std::endl;
+        }
+    }
     ShowMap(int width, int height, double res): map_width_(width), map_height_(height), res_(res){
         map_ = cv::Mat::zeros(cv::Size(1000, 1000), CV_8UC3);
+        cv::namedWindow("showmap", CV_WINDOW_AUTOSIZE);
+        cv::setMouseCallback("showmap", ShowMap::MouseClick, this);
     }
     void DrawMap(const vector<PosXY> &offset){
         int col;
@@ -65,11 +82,25 @@ public:
                 path.push_back(key);
             }
         }
-
         cv::flip(map_, map_, 0);
-        cv::namedWindow("showmap", CV_WINDOW_AUTOSIZE );
-        cv::imshow("showmap", map_);
-        cv::waitKey(0);
+
+        while(1) {
+            cv::imshow("showmap", map_);
+            char key = cv::waitKey();
+            if(key == 27)
+                break;
+            if(key == 'w'){
+                std::ofstream onfile;
+                onfile.open("RNDF.txt", std::ios::out);
+                if(onfile.is_open()){
+                    for(auto &xy: choose_points)
+                        onfile<<std::fixed<<std::setprecision(6)<< xy.x * 0.000001 << " "
+                     << std::fixed<<std::setprecision(6)<< xy.y * 0.000001 << " 0 2" <<endl;
+                }
+                onfile.close();
+                break;
+            }
+        }
     }
 };
 
@@ -93,6 +124,7 @@ void LonLat2Offset(vector<PosXY> &offset, const PosXY &origin, const vector<vect
         }
         double offset_x = x * 0.1 - origin.meterx;
         double offset_y = y * 0.1 - origin.metery;
+        // filter some points
         if(sqrt(pow(offset_x - pre_x, 2) + pow(offset_y - pre_y, 2)) >= kDisPoints) {
             offset.emplace_back(lines[i][0], lines[i][1], x * 0.1, y * 0.1, offset_x, offset_y);
             pre_x = offset_x;
@@ -137,6 +169,16 @@ int main(){
     vector<PosXY> offset;
     LonLat2Offset(offset, origin, lines);
     std::cout << offset.size() << std::endl;
+
+//    std::ofstream onfile;
+//    onfile.open("RNDFFull.txt", std::ios::out);
+//    if(onfile.is_open()){
+//        for(int i = 0; i < offset.size(); ++i)
+//            onfile<<std::fixed<<std::setprecision(6)<< offset[i].x * 0.000001 << " "
+//                  << std::fixed<<std::setprecision(6)<< offset[i].y * 0.000001<< " 0 2" <<endl;
+//    }
+//    onfile.close();
+
 //    ShowOffsetDebug(offset);
     ShowMap sm(1000,1000,0.5);
     sm.DrawMap(offset);
