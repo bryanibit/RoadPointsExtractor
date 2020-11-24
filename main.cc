@@ -14,6 +14,9 @@ const double kDisPoints = 2.0;
 
 class PosXY{
 public:
+    // xy: lon,lat * 1000000
+    // meterxy: xy in meter
+    // offsetxy: xy in image in meter
     double x;
     double y;
     double meterx;
@@ -57,12 +60,31 @@ public:
     }
     void OnMouse(int event, int x, int y, int flag){
         if (event == CV_EVENT_LBUTTONDOWN) {
-            auto choose = cv::Point(x, y);
+//            auto choose = cv::Point(x, y);
             std::cout << "x,y: " << x << ", " << y << std::endl;
+            int dis_sqrt = std::numeric_limits<int>::max();
+            int min_i;
+            for(int i = 0; i < path.size(); ++i){
+                int col = path[i] / max(map_width_, map_height_);
+                int row = path[i] % max(map_width_, map_height_);
+                int distance = pow(col - x, 2) + pow(row - y, 2);
+
+                if(distance < dis_sqrt) {
+                    dis_sqrt = distance;
+                    min_i = i;
+                }
+            }
+//            std::cout << "find close point\n";
+            cv::circle(map_, cv::Point(path[min_i] / max(map_width_, map_height_),
+                                       path[min_i] % max(map_width_, map_height_)),
+                       3, cv::Scalar(0, 0, 255), -1);
+            choose_points.emplace_back(pixel2xy_[path[min_i]].first, pixel2xy_[path[min_i]].second, 0,0,0,0);
+            // save to txt: pixel2xy_[path[min_i]].first * 0.000001
+            // save to txt: pixel2xy_[path[min_i]].second * 0.000001
         }
     }
     ShowMap(int width, int height, double res): map_width_(width), map_height_(height), res_(res){
-        map_ = cv::Mat::zeros(cv::Size(1000, 1000), CV_8UC3);
+        map_ = cv::Mat(cv::Size(map_width_, map_height_), CV_8UC3, cv::Scalar(255,255,255));
         cv::namedWindow("showmap", CV_WINDOW_AUTOSIZE);
         cv::setMouseCallback("showmap", ShowMap::MouseClick, this);
     }
@@ -76,17 +98,17 @@ public:
             if(col < 0 || row < 0)
                 count++;
             else {
-                cv::circle(map_, cv::Point(col, row), 1, cv::Scalar(255, 255, 255), -1);
+                cv::circle(map_, cv::Point(col, row), 1, cv::Scalar(125, 125, 0), -1);
                 auto key = col * max(map_width_, map_height_) + row;
                 pixel2xy_[key] = make_pair(offset[i].x, offset[i].y);
                 path.push_back(key);
             }
         }
-        cv::flip(map_, map_, 0);
+        //cv::flip(map_, map_, 0);
 
         while(1) {
             cv::imshow("showmap", map_);
-            char key = cv::waitKey();
+            char key = cv::waitKey(10);
             if(key == 27)
                 break;
             if(key == 'w'){
