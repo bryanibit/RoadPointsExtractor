@@ -59,10 +59,11 @@ private:
     vector<std::pair<int,PosXY> > choose_points;
     int mode;
     PosXY origin_;
+    int dis_sqrt_;
 
 public:
-    ShowMap(int width, int height, double res, PosXY &origin): map_width_(width), map_height_(height),
-                                                               origin_(origin), res_(res), mode(0){
+    ShowMap(int width, int height, double res, PosXY &origin):
+            map_width_(width), map_height_(height), origin_(origin), res_(res), mode(0), dis_sqrt_(std::numeric_limits<int>::max()){
         map_ = cv::Mat(cv::Size(map_width_, map_height_), CV_8UC3, cv::Scalar(255,255,255));
         cv::namedWindow("showmap", CV_WINDOW_AUTOSIZE);
         cv::setMouseCallback("showmap", ShowMap::MouseClick, this);
@@ -87,15 +88,15 @@ public:
         if (event == CV_EVENT_LBUTTONDOWN) {
 //            auto choose = cv::Point(x, y);
             std::cout << "x,y: " << x << ", " << y << std::endl;
-            int dis_sqrt = std::numeric_limits<int>::max();
+            dis_sqrt_ = std::numeric_limits<int>::max();
             int min_i;
             for(int i = 0; i < path.size(); ++i){
                 int col = path[i] / max(map_width_, map_height_);
                 int row = path[i] % max(map_width_, map_height_);
                 int distance = pow(col - x, 2) + pow(row - y, 2);
 
-                if(distance < dis_sqrt) {
-                    dis_sqrt = distance;
+                if(distance < dis_sqrt_) {
+                    dis_sqrt_ = distance;
                     min_i = i;
                 }
             }
@@ -111,7 +112,7 @@ public:
         }
     }
 
-    void DrawMap(const vector<PosXY> &offset){
+    void DrawFullRoadPoints(const vector<PosXY> &offset){
         int col;
         int row;
         int count = 0;
@@ -124,10 +125,14 @@ public:
                 cv::circle(map_, cv::Point(col, row), 1, cv::Scalar(125, 125, 0), -1);
                 auto key = col * max(map_width_, map_height_) + row;
                 pixel2xy_[key] = PosXY(offset[i].x, offset[i].y,
-                        offset[i].meterx, offset[i].metery, offset[i].offsetx, offset[i].offsety);
+                                       offset[i].meterx, offset[i].metery, offset[i].offsetx, offset[i].offsety);
                 path.push_back(key);
             }
         }
+    }
+
+    void DrawMap(const vector<PosXY> &offset){
+        DrawFullRoadPoints(offset);
         //cv::flip(map_, map_, 0);
         cv::Mat showmap = map_.clone();
         while(1) {
@@ -137,7 +142,7 @@ public:
                 break;
             if(key == 'w'){
                 std::ofstream onfile;
-                onfile.open("RNDF.txt", std::ios::out);
+                onfile.open("RNDF" + to_string(choose_points.size()) + ".txt", std::ios::out);
                 if(onfile.is_open()){
                     for(int i = 0; i < choose_points.size(); ++i)
                         onfile<<to_string(i + 1) << " " << std::fixed<<std::setprecision(6)<<
@@ -145,6 +150,7 @@ public:
                               << choose_points[i].second.y * 0.000001 << " 0 2" <<endl;
                 }
                 onfile.close();
+                cv::imwrite("RNDF" + to_string(choose_points.size()) + ".jpg",showmap);
             }
             if(key == 'r'){
                 if(choose_points.empty())
@@ -155,9 +161,10 @@ public:
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
             }
-            if(key == 'm')
-                mode = (mode == 0? 1: 0);
-
+            if(key == 'm') {
+                mode = (mode == 0 ? 1 : 0);
+                showmap = map_.clone();
+            }
             for(int i = 0; i < choose_points.size(); ++i) {
                 cv::circle(showmap, cv::Point(choose_points[i].first / max(map_width_, map_height_),
                                            choose_points[i].first % max(map_width_, map_height_)),
@@ -166,6 +173,10 @@ public:
                                                           choose_points[i].first % max(map_width_, map_height_)),
                             cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(180, 185, 0), 2);
             }
+            cv::putText(showmap, mode == 0? "Mode: constraint": "Mode: free",
+                        cv::Point(5, 20),cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(125, 0, 125), 2);
+//            cv::putText(showmap, to_string(sqrt(dis_sqrt_)), cv::Point(map_width_ - 100, 20),
+//                        cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(125, 125, 125), 2);
         }
     }
 };
