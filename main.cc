@@ -6,11 +6,15 @@
 #include <string>
 #include <unordered_map>
 #include "opencv2/opencv.hpp"
-//#include "opencv2/highgui.hpp"
+#include <thread>
+#include <chrono>
 
 using namespace std;
 
 const double kDisPoints = 2.0;
+const int kWIDTH = 1000;
+const int kHEIGHT = 10000;
+const double kRES = 0.5;
 
 class PosXY{
 public:
@@ -49,9 +53,9 @@ private:
     double res_;
     cv::Mat map_;
 //            (cv::Size(1000, 1000), CV_8UC3, cv::Scalar(0, 0, 0));
-    std::unordered_map<int, std::pair<double, double> > pixel2xy_;
+    std::unordered_map<int, PosXY > pixel2xy_;
     vector<int> path;
-    vector<PosXY> choose_points;
+    vector<std::pair<int,PosXY> > choose_points;
 
 public:
     static void MouseClick(int event, int x, int y, int flag, void* userdata){
@@ -74,11 +78,9 @@ public:
                     min_i = i;
                 }
             }
-//            std::cout << "find close point\n";
-            cv::circle(map_, cv::Point(path[min_i] / max(map_width_, map_height_),
-                                       path[min_i] % max(map_width_, map_height_)),
-                       3, cv::Scalar(0, 0, 255), -1);
-            choose_points.emplace_back(pixel2xy_[path[min_i]].first, pixel2xy_[path[min_i]].second, 0,0,0,0);
+            choose_points.push_back(make_pair(path[min_i], PosXY(pixel2xy_[path[min_i]].x, pixel2xy_[path[min_i]].y,
+                                       pixel2xy_[path[min_i]].meterx,pixel2xy_[path[min_i]].metery,
+                                       pixel2xy_[path[min_i]].offsetx,pixel2xy_[path[min_i]].offsety)));
             // save to txt: pixel2xy_[path[min_i]].first * 0.000001
             // save to txt: pixel2xy_[path[min_i]].second * 0.000001
         }
@@ -100,14 +102,15 @@ public:
             else {
                 cv::circle(map_, cv::Point(col, row), 1, cv::Scalar(125, 125, 0), -1);
                 auto key = col * max(map_width_, map_height_) + row;
-                pixel2xy_[key] = make_pair(offset[i].x, offset[i].y);
+                pixel2xy_[key] = PosXY(offset[i].x, offset[i].y,
+                        offset[i].meterx, offset[i].metery, offset[i].offsetx, offset[i].offsety);
                 path.push_back(key);
             }
         }
         //cv::flip(map_, map_, 0);
-
+        cv::Mat showmap = map_.clone();
         while(1) {
-            cv::imshow("showmap", map_);
+            cv::imshow("showmap", showmap);
             char key = cv::waitKey(10);
             if(key == 27)
                 break;
@@ -115,12 +118,30 @@ public:
                 std::ofstream onfile;
                 onfile.open("RNDF.txt", std::ios::out);
                 if(onfile.is_open()){
-                    for(auto &xy: choose_points)
-                        onfile<<std::fixed<<std::setprecision(6)<< xy.x * 0.000001 << " "
-                     << std::fixed<<std::setprecision(6)<< xy.y * 0.000001 << " 0 2" <<endl;
+                    for(int i = 0; i < choose_points.size(); ++i)
+                        onfile<<to_string(i) << " " << std::fixed<<std::setprecision(6)<<
+                              choose_points[i].second.x * 0.000001 << " " << std::fixed<<std::setprecision(6)
+                              << choose_points[i].second.y * 0.000001 << " 0 2" <<endl;
                 }
                 onfile.close();
                 break;
+            }
+            if(key == 'r'){
+                if(choose_points.empty()) {
+                    std::cerr << "choose vector is empty\n";
+                    break;
+                }
+                choose_points.pop_back();
+                showmap = map_.clone();
+                std::this_thread::sleep_for(std::chrono::milliseconds(10));
+            }
+            for(int i = 0; i < choose_points.size(); ++i) {
+                cv::circle(showmap, cv::Point(choose_points[i].first / max(map_width_, map_height_),
+                                           choose_points[i].first % max(map_width_, map_height_)),
+                           4, cv::Scalar(0, 0, 255), -1);
+                cv::putText(showmap, to_string(i + 1), cv::Point(choose_points[i].first / max(map_width_, map_height_),
+                                                          choose_points[i].first % max(map_width_, map_height_)),
+                            cv::FONT_HERSHEY_DUPLEX, 1.0, CV_RGB(180, 185, 0), 2);
             }
         }
     }
@@ -202,7 +223,7 @@ int main(){
 //    onfile.close();
 
 //    ShowOffsetDebug(offset);
-    ShowMap sm(1000,1000,0.5);
+    ShowMap sm(kWIDTH,kHEIGHT,kRES);
     sm.DrawMap(offset);
     return 0;
 }
