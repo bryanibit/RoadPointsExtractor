@@ -13,7 +13,7 @@ using namespace std;
 
 const double kDisPoints = 2.0;
 const int kWIDTH = 1000;
-const int kHEIGHT = 10000;
+const int kHEIGHT = 1000;
 const double kRES = 0.5;
 
 class PosXY{
@@ -124,16 +124,15 @@ public:
                               << choose_points[i].second.y * 0.000001 << " 0 2" <<endl;
                 }
                 onfile.close();
-                break;
             }
             if(key == 'r'){
-                if(choose_points.empty()) {
+                if(choose_points.empty())
                     std::cerr << "choose vector is empty\n";
-                    break;
+                else {
+                    choose_points.pop_back();
+                    showmap = map_.clone();
+                    std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
-                choose_points.pop_back();
-                showmap = map_.clone();
-                std::this_thread::sleep_for(std::chrono::milliseconds(10));
             }
             for(int i = 0; i < choose_points.size(); ++i) {
                 cv::circle(showmap, cv::Point(choose_points[i].first / max(map_width_, map_height_),
