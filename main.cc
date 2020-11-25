@@ -28,6 +28,7 @@ public:
     double offsetx;
     double offsety;
     PosXY() = default;
+    PosXY(const PosXY&) = default;
     PosXY(double x__, double y__, double meterx__, double metery__, double offsetx__, double offsety__):
             x(x__), y(y__), meterx(meterx__), metery(metery__), offsetx(offsetx__), offsety(offsety__){}
 };
@@ -56,12 +57,32 @@ private:
     std::unordered_map<int, PosXY > pixel2xy_;
     vector<int> path;
     vector<std::pair<int,PosXY> > choose_points;
+    int mode;
+    PosXY origin_;
 
 public:
+    ShowMap(int width, int height, double res, PosXY &origin): map_width_(width), map_height_(height),
+                                                               origin_(origin), res_(res), mode(0){
+        map_ = cv::Mat(cv::Size(map_width_, map_height_), CV_8UC3, cv::Scalar(255,255,255));
+        cv::namedWindow("showmap", CV_WINDOW_AUTOSIZE);
+        cv::setMouseCallback("showmap", ShowMap::MouseClick, this);
+    }
+
     static void MouseClick(int event, int x, int y, int flag, void* userdata){
         auto showmap_obj = reinterpret_cast<ShowMap*>(userdata);
         showmap_obj->OnMouse(event, x,y,flag);
     }
+
+    PosXY Pixel2LL(int px, int py){
+        double xlon = ((px - map_width_ / 2.0) * res_ + origin_.meterx);
+        double ylat = ((py - map_height_/ 2.0) * res_ + origin_.metery);
+        double L;
+        double B;
+        Mercator::XY2LB(xlon, ylat, L, B);
+        return PosXY(L*1000000, B* 1000000, xlon, ylat,
+                     xlon - origin_.meterx, ylat - origin_.metery);
+    }
+
     void OnMouse(int event, int x, int y, int flag){
         if (event == CV_EVENT_LBUTTONDOWN) {
 //            auto choose = cv::Point(x, y);
@@ -78,18 +99,18 @@ public:
                     min_i = i;
                 }
             }
-            choose_points.push_back(make_pair(path[min_i], PosXY(pixel2xy_[path[min_i]].x, pixel2xy_[path[min_i]].y,
+            if(mode == 0)
+                choose_points.push_back(make_pair(path[min_i], PosXY(pixel2xy_[path[min_i]].x, pixel2xy_[path[min_i]].y,
                                        pixel2xy_[path[min_i]].meterx,pixel2xy_[path[min_i]].metery,
                                        pixel2xy_[path[min_i]].offsetx,pixel2xy_[path[min_i]].offsety)));
-            // save to txt: pixel2xy_[path[min_i]].first * 0.000001
-            // save to txt: pixel2xy_[path[min_i]].second * 0.000001
+            else{
+                // mouse xy -> setoffxy
+                PosXY need = Pixel2LL(x, y);
+                choose_points.emplace_back(x * max(map_width_, map_height_) + y, need);
+            }
         }
     }
-    ShowMap(int width, int height, double res): map_width_(width), map_height_(height), res_(res){
-        map_ = cv::Mat(cv::Size(map_width_, map_height_), CV_8UC3, cv::Scalar(255,255,255));
-        cv::namedWindow("showmap", CV_WINDOW_AUTOSIZE);
-        cv::setMouseCallback("showmap", ShowMap::MouseClick, this);
-    }
+
     void DrawMap(const vector<PosXY> &offset){
         int col;
         int row;
@@ -119,7 +140,7 @@ public:
                 onfile.open("RNDF.txt", std::ios::out);
                 if(onfile.is_open()){
                     for(int i = 0; i < choose_points.size(); ++i)
-                        onfile<<to_string(i) << " " << std::fixed<<std::setprecision(6)<<
+                        onfile<<to_string(i + 1) << " " << std::fixed<<std::setprecision(6)<<
                               choose_points[i].second.x * 0.000001 << " " << std::fixed<<std::setprecision(6)
                               << choose_points[i].second.y * 0.000001 << " 0 2" <<endl;
                 }
@@ -134,6 +155,9 @@ public:
                     std::this_thread::sleep_for(std::chrono::milliseconds(10));
                 }
             }
+            if(key == 'm')
+                mode = (mode == 0? 1: 0);
+
             for(int i = 0; i < choose_points.size(); ++i) {
                 cv::circle(showmap, cv::Point(choose_points[i].first / max(map_width_, map_height_),
                                            choose_points[i].first % max(map_width_, map_height_)),
@@ -222,7 +246,7 @@ int main(){
 //    onfile.close();
 
 //    ShowOffsetDebug(offset);
-    ShowMap sm(kWIDTH,kHEIGHT,kRES);
+    ShowMap sm(kWIDTH, kHEIGHT, kRES, origin);
     sm.DrawMap(offset);
     return 0;
 }
