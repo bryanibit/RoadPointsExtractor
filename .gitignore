@@ -1,6 +1,5 @@
 .idea
 test
-*.txt
 .vscode
 cmake-build-debug
 build
