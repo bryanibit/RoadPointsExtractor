@@ -23,3 +23,5 @@ cmake ..
 make -j
 ./extract_data_rosbag
 ```
+The effect can be described like  
+![effect](https://raw.githubusercontent.com/bryanibit/RoadPointsExtractor/master/img/exp.jpg)

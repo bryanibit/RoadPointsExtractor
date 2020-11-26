@@ -2,4 +2,8 @@
 test
 .vscode
 cmake-build-debug
+cmake-build-debug/*.jpg
+cmake-build-debug/*.txt
+build/*.jpg
+build/*.txt
 build
