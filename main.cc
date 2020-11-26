@@ -252,10 +252,15 @@ public:
     }
 };
 
-int main(){
+int main(int argc, char** argv){
     PosXY origin;
     vector<PosXY> offset;
-    process::ExtractFullRoad("../res.txt", origin, offset);
+    string file_road;
+    if(argc == 1)
+        file_road = "../data/res.txt";
+    else
+        file_road = string(argv[1]);
+    process::ExtractFullRoad(file_road, origin, offset);
 //    ShowOffsetDebug(offset);
     ShowMap sm(kWIDTH, kHEIGHT, kRES, origin);
     sm.DrawMap(offset);
